@@ -1,3 +1,9 @@
+remove the red circle thats always visible. also im in the floor. it should be a parenthesis shape and only appear when im being damaged. also fix the error.  also the bullets from the shotgun only appear as one bullet. also fix the fact the bots cannot aim down or up
+
+[06:44:59 PM] [GLOBAL] TypeError: can't access property "damage", p is undefined
+  shootPlayer@blob:https://0w2my54kd3vmklfrwvoug6f2f3j0i2ubl1e4dlna2khopf4g59-h833788197.scf.usercontent.goog/def0fae9-becb-49fe-92af-b9329272cecc:1250:17
+  onMouseDown@blob:https://0w2my54kd3vmklfrwvoug6f2f3j0i2ubl1e4dlna2khopf4g59-h833788197.scf.usercontent.goog/def0fae9-becb-49fe-92af-b9329272cecc:1629:107
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -127,21 +133,28 @@
             pointer-events: none; transform: translate(-50%, -50%);
         }
 
-        /* FIX: New Damage Overlay (Parentheses) */
-        #damage-overlay {
+        /* Damage Direction Indicator */
+        #damage-indicator {
             position: absolute;
             top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 150px; 
-            color: rgba(255, 0, 0, 0.7); 
-            font-weight: bold;
+            width: 150px; height: 150px;
+            margin-top: -75px; margin-left: -75px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 0, 0, 0.1); /* Background circle */
             pointer-events: none;
-            display: flex; 
-            gap: 600px; /* Wide gap between ( and ) */
-            opacity: 0;
-            transition: opacity 0.1s;
-            text-shadow: 0 0 20px red;
+            display: none;
             z-index: 5;
+        }
+        .damage-arrow {
+            position: absolute;
+            width: 10px; height: 30px;
+            background: red;
+            border-radius: 3px;
+            top: 0; left: 50%;
+            margin-left: -5px;
+            transform-origin: 50% 100%;
+            opacity: 0;
+            transition: opacity 0.1s, transform 0.1s;
         }
 
 
@@ -175,8 +188,8 @@
             </div>
         </div>
         
-        <div id="damage-overlay">
-            <span>(</span><span>)</span>
+        <div id="damage-indicator" style="display: none;">
+            <!-- Arrow dynamically updated/rotated by JS -->
         </div>
 
         <div id="interaction-msg">Press E to Search Chest</div>
@@ -215,9 +228,9 @@
     <script>
         // --- Configuration ---
         const WORLD_SIZE = 400;
-        const BOT_SPAWN_RADIUS = 100; 
-        const PROJECTILE_SPEED = 300; 
-        const BOT_MISS_CHANCE = 0.4; 
+        const BOT_SPAWN_RADIUS = 100; // New minimum spawn radius from (0,0,0)
+        const PROJECTILE_SPEED = 300; // Increased speed
+        const BOT_MISS_CHANCE = 0.4; // 40% chance to miss, regardless of distance (base)
         const GRAVITY = 25;
         const PLAYER_SPEED = 12;
         const JUMP_FORCE = 12;
@@ -235,7 +248,7 @@
 
         // Camera
         const CAM_OFFSET_NORMAL = new THREE.Vector3(0.8, 0.0, 3.0); 
-        let camOffsetAds = new THREE.Vector3(0.5, 0.0, 1.0); 
+        let camOffsetAds = new THREE.Vector3(0.5, 0.0, 1.0); // Dynamic based on weapon
 
         // Game State
         let scene, camera, renderer;
@@ -260,6 +273,9 @@
             isReloading: false
         };
 
+        // UI elements for damage indicator
+        let damageIndicatorElement;
+
         // --- Init ---
         function init() {
             scene = new THREE.Scene();
@@ -282,6 +298,14 @@
             dirLight.shadow.mapSize.width = 2048;
             dirLight.shadow.mapSize.height = 2048;
             scene.add(dirLight);
+
+            // Initialize damage indicator arrow
+            damageIndicatorElement = document.getElementById('damage-indicator');
+            const arrow = document.createElement('div');
+            arrow.className = 'damage-arrow';
+            damageIndicatorElement.appendChild(arrow);
+            damageIndicatorElement.arrow = arrow;
+            
 
             createTerrain();
             createPlayer();
@@ -315,6 +339,7 @@
             head.position.y = 0.85;
             group.add(head);
             
+            // Eye (for direction check logic)
             const eye = new THREE.Object3D();
             eye.position.set(0, 0, -0.2);
             head.add(eye);
@@ -328,9 +353,9 @@
             const armR = new THREE.Mesh(armGeo, matBody);
             armR.position.set(0.42, 0.5, 0);
             
-            // ARM FIX: Center pivot for better rotation
+            // ARM FIX: Center pivot
             armR.geometry.translate(0, -0.25, 0); 
-            armR.rotation.y = Math.PI; 
+            armR.rotation.y = Math.PI; // Rotate arm 180 degrees to face forward
             
             armR.position.y = 0.65; 
             group.add(armR);
@@ -344,7 +369,7 @@
             legR.position.set(0.18, -0.4, 0);
             group.add(legR);
 
-            // Gun Model
+            // Gun Model (Generic Block for now, colored by weapon type)
             const gunGroup = new THREE.Group();
             const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.7), matDark);
             const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.8), new THREE.MeshStandardMaterial({color: 0x111111}));
@@ -368,6 +393,7 @@
             pickGroup.add(handle);
             pickGroup.add(headPick);
             
+            // FIX: Rotate pickaxe 180 degrees (local Y) to face forward relative to the flipped arm
             pickGroup.rotation.y = Math.PI;
             pickGroup.rotation.x = Math.PI / 2;
             pickGroup.position.set(0, -0.5, 0.2);
@@ -424,7 +450,7 @@
                 position: new THREE.Vector3(0, 50, 0),
                 velocity: new THREE.Vector3(),
                 onGround: false,
-                isHit: false 
+                isHit: false // State for damage flicker
             };
             scene.add(mesh);
         }
@@ -437,7 +463,7 @@
                     x = (Math.random() - 0.5) * limit * 2;
                     z = (Math.random() - 0.5) * limit * 2;
                     distance = Math.sqrt(x*x + z*z);
-                } while (distance < BOT_SPAWN_RADIUS); 
+                } while (distance < BOT_SPAWN_RADIUS); // Ensure bots are far away
                 
                 const bot = {
                     mesh: createHumanoidModel(0xe74c3c),
@@ -446,8 +472,8 @@
                     health: 100,
                     lastShot: 0,
                     speed: 4 + Math.random() * 3,
-                    aggro: false, 
-                    flashTime: 0 
+                    aggro: false, // Will chase if true
+                    flashTime: 0 // Flash return fix
                 };
                 bot.mesh.userData.gun.visible = true;
                 scene.add(bot.mesh);
@@ -475,6 +501,7 @@
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('hud-top').style.display = 'flex';
             document.getElementById('inventory-bar').style.display = 'flex';
+            document.getElementById('damage-indicator').style.display = 'block';
             document.body.requestPointerLock();
 
             // Reset
@@ -520,7 +547,9 @@
                 parts.gun.visible = true;
                 parts.gunBody.material.color.setHex(weaponData.color);
                 
+                // Set Game State Stats
                 if (gameState.activeWeaponData?.name !== itemName) {
+                    // Swapped to new gun, update clip
                     gameState.ammo.clip = weaponData.clip; 
                     gameState.activeWeaponData = { ...weaponData, name: itemName };
                     camOffsetAds = new THREE.Vector3(0.5, 0.0, weaponData.adsZoom);
@@ -549,9 +578,10 @@
 
             projectiles.push({
                 mesh: mesh,
-                velocity: dir.clone().multiplyScalar(PROJECTILE_SPEED), 
+                velocity: dir.clone().multiplyScalar(PROJECTILE_SPEED), // Faster bullets
                 life: 1.5,
                 fromPlayer: isPlayer,
+                // New: store the previous position for raycasting
                 lastPos: start.clone() 
             });
         }
@@ -573,7 +603,7 @@
                 }
             }
 
-            // Check for Bot hit
+            // Check for Bot hit (if it was a player projectile)
             if (p.fromPlayer) {
                 for(let bot of bots) {
                     const botHitbox = new THREE.Box3().setFromObject(bot.mesh);
@@ -584,6 +614,7 @@
                 }
             }
             
+            // Check for Terrain hit
             const intersects = raycaster.intersectObject(terrainMesh);
             if (intersects.length > 0) {
                 return true;
@@ -597,10 +628,11 @@
                 const p = projectiles[i];
                 p.life -= dt;
                 
-                p.lastPos.copy(p.mesh.position);
+                p.lastPos.copy(p.mesh.position); // Store current pos
                 const step = p.velocity.clone().multiplyScalar(dt);
                 p.mesh.position.add(step);
 
+                // Collision check
                 if (checkProjectileCollision(p, step) || p.life <= 0) {
                     scene.remove(p.mesh);
                     projectiles.splice(i, 1);
@@ -609,10 +641,14 @@
         }
 
         function applyBotDamage(bot, dmg) {
+             // Aggro Bot
             bot.aggro = true;
+
             bot.health -= dmg;
             showDamage(bot.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0)), dmg);
-            bot.flashTime = 0.05; 
+            
+            // Flash Effect (FIXED: use a timer to reset)
+            bot.flashTime = 0.05; // Flash for 50ms
 
             if (bot.health <= 0 && bots.includes(bot)) {
                 scene.remove(bot.mesh);
@@ -639,49 +675,60 @@
             gameState.ammo.clip--;
             updateHUD();
 
+            // Barrel Position
             const gunWorldPos = new THREE.Vector3();
+            // Get position of the end of the barrel (gun's second child which is the barrel, offset by -0.4)
             player.mesh.userData.gun.children[1].getWorldPosition(gunWorldPos);
 
+            // Center of Screen Ray
             const raycaster = new THREE.Raycaster();
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); 
+            
             const targetPoint = raycaster.ray.at(weapon.range, new THREE.Vector3());
             
+            // Apply Shotgun Pellets or Single Shot
             const pellets = weapon.pellets || 1;
             
             for(let i=0; i<pellets; i++) {
-                // FIX: Add jitter to spawn point so bullets don't overlap perfectly
-                const spawnJitter = (pellets > 1) ? new THREE.Vector3((Math.random()-0.5)*0.2, (Math.random()-0.5)*0.2, 0) : new THREE.Vector3();
-                const spawnPos = gunWorldPos.clone().add(spawnJitter);
-
+                // Visual Tracer Direction
                 const dir = new THREE.Vector3().subVectors(targetPoint, gunWorldPos).normalize();
                 
+                // Spread Logic
                 const currentSpread = isADS ? weapon.spread * 0.3 : weapon.spread;
+                
                 dir.x += (Math.random()-0.5) * currentSpread;
                 dir.y += (Math.random()-0.5) * currentSpread;
                 dir.z += (Math.random()-0.5) * currentSpread;
+                
                 dir.normalize();
 
-                const p = createProjectile(spawnPos, dir, true);
-                p.damage = weapon.damage; 
+                const p = createProjectile(gunWorldPos, dir, true);
+                p.damage = weapon.damage; // Attach damage to projectile for collision check
             }
         }
 
         function shootBot(bot) {
-            const weapon = { damage: 8, fireRate: 800, range: 100 }; 
+            const weapon = { damage: 8, fireRate: 800, range: 100 }; // Bot default gun
             
             if (performance.now() - bot.lastShot < weapon.fireRate) return;
             bot.lastShot = performance.now();
             
+            // Barrel Position
             const gunPos = bot.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0.5));
-            const target = player.position.clone().add(new THREE.Vector3(0,1.5,0)); 
+            
+            // Target direction
+            const target = player.position.clone().add(new THREE.Vector3(0,1.5,0)); // Aim at head/chest
             let dir = new THREE.Vector3().subVectors(target, gunPos).normalize();
             
+            // Miss Logic: Apply randomness based on distance and constant miss chance
             const dist = bot.position.distanceTo(player.position);
-            const accuracyFactor = dist / 60; 
+            const accuracyFactor = dist / 60; // Max spread at 60 units
             
             let spread = 0.05 * accuracyFactor;
+            
+            // Miss chance check
             if (Math.random() < BOT_MISS_CHANCE) {
-                spread += 0.1; 
+                spread += 0.1; // Add extra spread for guaranteed miss
             }
             
             dir.x += (Math.random()-0.5) * spread;
@@ -691,7 +738,7 @@
 
             const p = createProjectile(gunPos, dir, false);
             p.damage = weapon.damage;
-            p.shooterPos = bot.position.clone(); 
+            p.shooterPos = bot.position.clone(); // For directional damage indicator
         }
 
         function reload() {
@@ -715,8 +762,10 @@
         function updatePlayerLogic(dt) {
             if (!isGameActive) return;
 
+            // Rotation
             player.mesh.rotation.y = cameraRotation.y;
 
+            // Movement
             const dir = new THREE.Vector3();
             const fwd = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), cameraRotation.y);
             const right = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), cameraRotation.y);
@@ -729,6 +778,7 @@
 
             player.position.add(dir.multiplyScalar(PLAYER_SPEED * dt));
 
+            // Physics
             player.velocity.y -= GRAVITY * dt;
             player.position.y += player.velocity.y * dt;
 
@@ -749,8 +799,7 @@
             player.position.x = THREE.MathUtils.clamp(player.position.x, -lim, lim);
             player.position.z = THREE.MathUtils.clamp(player.position.z, -lim, lim);
 
-            // FIX: Offset mesh by +0.8 so feet are on ground (not buried)
-            player.mesh.position.copy(player.position).add(new THREE.Vector3(0, 0.8, 0));
+            player.mesh.position.copy(player.position);
 
             // Camera Follow
             const headPos = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
@@ -779,9 +828,12 @@
             const dirToPlayer = new THREE.Vector3().subVectors(player.position, bot.position).normalize();
             
             const ray = new THREE.Raycaster(botEyePos, dirToPlayer);
+            // Only check collision with terrain
             const intersects = ray.intersectObject(terrainMesh);
+            
             const distToTerrain = (intersects.length > 0) ? intersects[0].distance : 9999;
             
+            // Check if player is closer than the terrain hit
             if (dist < distToTerrain) {
                 return true;
             }
@@ -792,6 +844,7 @@
             for(const bot of bots) {
                 const dist = bot.position.distanceTo(player.position);
                 
+                // Handle flash
                 if (bot.flashTime > 0) {
                     bot.flashTime -= dt;
                     bot.mesh.traverse(c => {
@@ -800,6 +853,7 @@
                         }
                     });
                 } else {
+                    // Turn off flash permanently
                     bot.mesh.traverse(c => {
                         if(c.isMesh && c.material.emissive) {
                             c.material.emissive.setHex(0x000000);
@@ -818,15 +872,18 @@
                     moving = true;
                 }
                 
+                // Bot always looks at the player if aggro or can see
                 if (shouldChase || canSee) {
                     bot.mesh.lookAt(player.position.x, bot.position.y, player.position.z);
                 }
 
+                // Shooting check: only if visible and close enough
                 if (canSee && dist < 60) {
                     if (performance.now() - bot.lastShot > 1500) {
                         shootBot(bot);
                     }
                 }
+
 
                 const gy = getTerrainHeight(bot.position.x, bot.position.z);
                 bot.position.y = gy;
@@ -851,24 +908,26 @@
                 p.armL.rotation.x = 0; p.armR.rotation.x = 0;
             }
 
-            // Gun Arm Overrides (FIXED ROTATION LOGIC)
+            // Gun Arm Overrides
             if (p.gun.visible) {
+                // The armR is already rotated 180 degrees (Math.PI) to face forward
+                // Adjust X rotation for stance
+                const armRotX = isMoving ? p.armR.rotation.x : 0;
+                
                 if (reloading) {
-                    // 180 degrees (backward/down) for reload
-                    p.armR.rotation.x = cameraRotation.x + Math.PI; 
+                    p.armR.rotation.x = -Math.PI/2 + 0.5;
+                } else if (ads) {
+                    p.armR.rotation.x = -Math.PI/2 - 0.2; 
+                    p.armR.rotation.y = Math.PI - 0.2; // Add PI because of arm 180 flip
                 } else {
-                    // 90 degrees (backward) for normal shooting
-                    p.armR.rotation.x = cameraRotation.x + Math.PI / 2;
+                    p.armR.rotation.x = armRotX - 0.1; 
+                    p.armR.rotation.y = Math.PI; // Standard 180 flipped
                 }
-                p.armR.rotation.y = cameraRotation.y; // Align with camera yaw if needed
             }
             
-            if (p.pickaxe.visible) {
-                 // Same logic for pickaxe as gun for now, or custom swing
-                 p.armR.rotation.x = cameraRotation.x + Math.PI / 2;
-                 if(keys.mouse && !isMoving) {
-                     p.armR.rotation.x += Math.sin(t*15) * 0.5; // Swing
-                 }
+            if (p.pickaxe.visible && keys.mouse && !isMoving) {
+                 p.armR.rotation.x = -Math.PI/2 + Math.sin(t*4) * 0.8;
+                 p.armR.rotation.y = Math.PI;
             }
         }
 
@@ -881,6 +940,7 @@
                         c.opened = true;
                         c.mesh.material.color.setHex(0x555555);
                         
+                        // Random Weapon Drop
                         const types = Object.keys(WEAPONS);
                         const rando = types[Math.floor(Math.random() * types.length)];
                         
@@ -966,15 +1026,35 @@
              gameState.health -= n;
              updateHUD();
              
-             // FIX: Show Parenthesis Overlay
-             const overlay = document.getElementById('damage-overlay');
-             overlay.style.opacity = 1;
-             
-             // Reset fade timer
-             if(overlay.timer) clearTimeout(overlay.timer);
-             overlay.timer = setTimeout(() => {
-                 overlay.style.opacity = 0;
-             }, 300); // Visible for 300ms
+             // Radial Indicator Logic
+             if (sourcePos) {
+                const playerFwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
+                const dirToSource = new THREE.Vector3().subVectors(sourcePos, player.position).normalize();
+                
+                // Calculate angle (in radians) between player's forward vector and the direction to the source
+                const angle = Math.atan2(playerFwd.z, playerFwd.x) - Math.atan2(dirToSource.z, dirToSource.x);
+                let degrees = angle * (180 / Math.PI);
+
+                // Normalize to 0-360
+                degrees = (degrees + 360) % 360; 
+
+                // Rotate the indicator so 0 degrees (up) is where the source is relative to player view
+                // We want the arrow to point *away* from the shooter on the screen (i.e. where to look)
+                
+                // The angle we need to rotate the arrow is 180 degrees offset from the direction to source
+                // degrees = degrees + 180; // This gives the direction *from* the source
+
+                // Show the indicator and rotate the arrow
+                damageIndicatorElement.style.display = 'block';
+                damageIndicatorElement.arrow.style.opacity = 1.0;
+                damageIndicatorElement.arrow.style.transform = `rotate(${-degrees}deg) translateY(-50%)`;
+
+                clearTimeout(damageIndicatorElement.timer);
+                damageIndicatorElement.timer = setTimeout(() => {
+                    damageIndicatorElement.arrow.style.opacity = 0;
+                }, 500);
+             }
+
 
              if(gameState.health <= 0) { 
                 isGameActive = false; 
