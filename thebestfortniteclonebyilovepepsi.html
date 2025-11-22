@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Royale: Drop Zone</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            user-select: none;
+        }
+
+        #game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        #main-menu {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 10; pointer-events: auto;
+            backdrop-filter: blur(5px);
+        }
+
+        h1 {
+            color: #fff; font-size: 4rem; text-transform: uppercase;
+            letter-spacing: 5px; margin-bottom: 10px;
+            text-shadow: 0 0 20px #3498db; font-style: italic;
+        }
+
+        .btn {
+            background: #f1c40f; color: #000; border: none;
+            padding: 15px 40px; font-size: 1.5rem; font-weight: bold;
+            cursor: pointer; transform: skew(-10deg); transition: all 0.2s;
+            box-shadow: 5px 5px 0px #e67e22; margin-top: 20px;
+        }
+        .btn:hover { transform: skew(-10deg) scale(1.05); background: #f39c12; }
+
+        /* HUD */
+        #hud-top {
+            padding: 20px; width: 100%; display: flex;
+        }
+
+        .stat-box {
+            background: rgba(0, 0, 0, 0.6); padding: 8px 16px;
+            border-left: 4px solid #3498db; margin-right: 15px;
+            transform: skew(-10deg); color: white;
+        }
+        .stat-value { font-size: 1.4rem; font-weight: bold; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; color: #aaa; }
+
+        #inventory-bar {
+            position: absolute; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 10px;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 10px;
+        }
+
+        .slot {
+            width: 60px; height: 60px;
+            background: rgba(0,0,0,0.6);
+            border: 2px solid #555;
+            color: white;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.8rem;
+            position: relative;
+        }
+
+        .slot.active {
+            border-color: #f1c40f;
+            box-shadow: 0 0 10px rgba(241, 196, 15, 0.5);
+            transform: scale(1.1);
+            background: rgba(255,255,255,0.1);
+        }
+
+        .slot-num {
+            position: absolute; top: 2px; left: 5px;
+            font-size: 0.7rem; color: #aaa;
+        }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 6px; height: 6px; background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 4px black;
+            transition: width 0.2s, height 0.2s, opacity 0.2s;
+        }
+        #crosshair.ads { opacity: 0.8; width: 2px; height: 2px; background: red; }
+        #crosshair.spread { width: 20px; height: 20px; opacity: 0.3; border: 2px solid white; background: transparent; }
+
+        #interaction-msg, #reload-msg, #weapon-msg {
+            position: absolute; left: 50%; transform: translateX(-50%);
+            text-shadow: 1px 1px 0 #000; font-weight: bold; display: none;
+        }
+        #interaction-msg { top: 60%; color: #f1c40f; font-size: 1.2rem; }
+        #reload-msg { top: 65%; color: #e74c3c; font-size: 1.2rem; text-transform: uppercase; }
+        #weapon-msg { top: 55%; color: #3498db; font-size: 1.5rem; font-style: italic; text-shadow: 0 0 10px rgba(52, 152, 219, 0.5); }
+
+        .damage-popup {
+            position: absolute; color: #fff; font-size: 1.5rem;
+            font-weight: 900; text-shadow: 2px 2px 0 #000;
+            pointer-events: none; transform: translate(-50%, -50%);
+        }
+
+        /* Damage Direction Indicator */
+        #damage-indicator {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 150px; height: 150px;
+            margin-top: -75px; margin-left: -75px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 0, 0, 0.1); /* Background circle */
+            pointer-events: none;
+            display: none;
+            z-index: 5;
+        }
+        .damage-arrow {
+            position: absolute;
+            width: 10px; height: 30px;
+            background: red;
+            border-radius: 3px;
+            top: 0; left: 50%;
+            margin-left: -5px;
+            transform-origin: 50% 100%;
+            opacity: 0;
+            transition: opacity 0.1s, transform 0.1s;
+        }
+
+
+        #win-screen, #death-screen {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 20; flex-direction: column; align-items: center; justify-content: center;
+            pointer-events: auto;
+        }
+        #win-screen { background: rgba(46, 204, 113, 0.9); }
+        #death-screen { background: rgba(192, 57, 43, 0.9); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="game-container"></div>
+    
+    <div id="ui-layer">
+        <div id="hud-top" style="display: none;">
+            <div class="stat-box" style="border-color: #2ecc71;">
+                <div class="stat-label">Health</div>
+                <div class="stat-value" id="health-display">100</div>
+            </div>
+            <div class="stat-box" style="border-color: #e67e22;">
+                <div class="stat-label">Ammo</div>
+                <div class="stat-value" id="ammo-display">--</div>
+            </div>
+            <div class="stat-box" style="border-color: #e74c3c;">
+                <div class="stat-label">Enemies</div>
+                <div class="stat-value" id="enemies-display">0</div>
+            </div>
+        </div>
+        
+        <div id="damage-indicator" style="display: none;">
+            <!-- Arrow dynamically updated/rotated by JS -->
+        </div>
+
+        <div id="interaction-msg">Press E to Search Chest</div>
+        <div id="weapon-msg">Picked up Rifle!</div>
+        <div id="reload-msg">Reloading...</div>
+        <div id="crosshair"></div>
+
+        <div id="inventory-bar" style="display: none;">
+            <div class="slot active" id="slot-0"><span class="slot-num">1</span><span id="item-0">Pickaxe</span></div>
+            <div class="slot" id="slot-1"><span class="slot-num">2</span><span id="item-1">Empty</span></div>
+            <div class="slot" id="slot-2"><span class="slot-num">3</span><span id="item-2">Empty</span></div>
+            <div class="slot" id="slot-3"><span class="slot-num">4</span><span id="item-3">Empty</span></div>
+            <div class="slot" id="slot-4"><span class="slot-num">5</span><span id="item-4">Empty</span></div>
+        </div>
+    </div>
+
+    <div id="main-menu">
+        <h1>Battle Royale<br><span style="font-size: 2rem; color: #f1c40f;">Drop Zone</span></h1>
+        <button class="btn" id="play-btn">DROP IN</button>
+        <p style="color: #aaa; margin-top: 20px; text-align: center;">
+            WASD: Move | SPACE: Jump | 1-5: Inventory<br>
+            LMB: Action | RMB: Aim | R: Reload | E: Chests
+        </p>
+    </div>
+
+    <div id="win-screen">
+        <h1 style="font-size: 5rem; font-style: italic;">VICTORY ROYALE!</h1>
+        <button class="btn" onclick="location.reload()">PLAY AGAIN</button>
+    </div>
+
+    <div id="death-screen">
+        <h1 style="font-size: 5rem; font-style: italic;">ELIMINATED</h1>
+        <button class="btn" onclick="location.reload()">RETURN TO LOBBY</button>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const WORLD_SIZE = 400;
+        const BOT_SPAWN_RADIUS = 100; // New minimum spawn radius from (0,0,0)
+        const PROJECTILE_SPEED = 300; // Increased speed
+        const BOT_MISS_CHANCE = 0.4; // 40% chance to miss, regardless of distance (base)
+        const GRAVITY = 25;
+        const PLAYER_SPEED = 12;
+        const JUMP_FORCE = 12;
+        const BOT_COUNT = 8;
+        const CHEST_COUNT = 12;
+        const HITBOX_RADIUS = 1.5; 
+
+        // Weapons Data
+        const WEAPONS = {
+            "Rifle":   { damage: 25, fireRate: 150, spread: 0.03, range: 200, clip: 30, color: 0x111111, adsZoom: 1.0 },
+            "Shotgun": { damage: 15, fireRate: 800, spread: 0.15, range: 40,  clip: 5,  pellets: 6, color: 0x8B0000, adsZoom: 1.5 },
+            "SMG":     { damage: 12, fireRate: 80,  spread: 0.08, range: 80,  clip: 40, color: 0x555555, adsZoom: 1.2 },
+            "Sniper":  { damage: 95, fireRate: 1500, spread: 0.001, range: 400, clip: 1,  color: 0x2E8B57, adsZoom: 0.3 }
+        };
+
+        // Camera
+        const CAM_OFFSET_NORMAL = new THREE.Vector3(0.8, 0.0, 3.0); 
+        let camOffsetAds = new THREE.Vector3(0.5, 0.0, 1.0); // Dynamic based on weapon
+
+        // Game State
+        let scene, camera, renderer;
+        let player, bots = [], chests = [], projectiles = [];
+        let damagePopups = [];
+        let terrainMesh;
+        let lastTime = performance.now();
+        let isGameActive = false;
+        
+        const keys = { w: false, a: false, s: false, d: false, space: false, r: false };
+        let isADS = false;
+        let cameraRotation = { x: 0, y: 0 };
+        let lastShotTime = 0;
+
+        const gameState = {
+            health: 100,
+            inventory: ["Pickaxe", null, null, null, null],
+            activeSlot: 0,
+            ammo: { clip: 0, reserve: 0 },
+            activeWeaponData: null,
+            enemiesAlive: BOT_COUNT,
+            isReloading: false
+        };
+
+        // UI elements for damage indicator
+        let damageIndicatorElement;
+
+        // --- Init ---
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 20, 150);
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.getElementById('game-container').appendChild(renderer.domElement);
+
+            // Lights
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.7);
+            scene.add(hemiLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(100, 200, 100);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            // Initialize damage indicator arrow
+            damageIndicatorElement = document.getElementById('damage-indicator');
+            const arrow = document.createElement('div');
+            arrow.className = 'damage-arrow';
+            damageIndicatorElement.appendChild(arrow);
+            damageIndicatorElement.arrow = arrow;
+            
+
+            createTerrain();
+            createPlayer();
+
+            window.addEventListener('resize', onResize);
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('mousemove', onMouseMove);
+            document.getElementById('play-btn').addEventListener('click', startGame);
+
+            animate();
+        }
+
+        // --- Assets & Models ---
+        function createHumanoidModel(color) {
+            const group = new THREE.Group();
+            const matBody = new THREE.MeshStandardMaterial({ color: color });
+            const matSkin = new THREE.MeshStandardMaterial({ color: 0xffccaa });
+            const matDark = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+            // Torso
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), matBody);
+            torso.position.y = 0.35; 
+            torso.castShadow = true;
+            group.add(torso);
+
+            // Head
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), matSkin);
+            head.position.y = 0.85;
+            group.add(head);
+            
+            // Eye (for direction check logic)
+            const eye = new THREE.Object3D();
+            eye.position.set(0, 0, -0.2);
+            head.add(eye);
+
+            // Arms
+            const armGeo = new THREE.BoxGeometry(0.18, 0.7, 0.18);
+            const armL = new THREE.Mesh(armGeo, matBody);
+            armL.position.set(-0.42, 0.5, 0);
+            group.add(armL);
+
+            const armR = new THREE.Mesh(armGeo, matBody);
+            armR.position.set(0.42, 0.5, 0);
+            
+            // ARM FIX: Center pivot
+            armR.geometry.translate(0, -0.25, 0); 
+            armR.rotation.y = Math.PI; // Rotate arm 180 degrees to face forward
+            
+            armR.position.y = 0.65; 
+            group.add(armR);
+
+            // Legs
+            const legGeo = new THREE.BoxGeometry(0.22, 0.8, 0.22);
+            const legL = new THREE.Mesh(legGeo, matDark);
+            legL.position.set(-0.18, -0.4, 0);
+            group.add(legL);
+            const legR = new THREE.Mesh(legGeo, matDark);
+            legR.position.set(0.18, -0.4, 0);
+            group.add(legR);
+
+            // Gun Model (Generic Block for now, colored by weapon type)
+            const gunGroup = new THREE.Group();
+            const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.7), matDark);
+            const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.8), new THREE.MeshStandardMaterial({color: 0x111111}));
+            gunBarrel.rotation.x = Math.PI / 2;
+            gunBarrel.position.z = -0.4;
+            gunGroup.add(gunBody);
+            gunGroup.add(gunBarrel);
+            
+            // FIX: Rotate gun 180 degrees (local Y) to face forward relative to the flipped arm
+            gunGroup.rotation.y = Math.PI; 
+            gunGroup.position.set(0, -0.5, 0.2); 
+            gunGroup.visible = false; 
+            armR.add(gunGroup);
+
+            // Pickaxe
+            const pickGroup = new THREE.Group();
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8), new THREE.MeshStandardMaterial({color: 0x8B4513}));
+            const headPick = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.1), new THREE.MeshStandardMaterial({color: 0x777777}));
+            handle.position.y = 0.2;
+            headPick.position.y = 0.6;
+            pickGroup.add(handle);
+            pickGroup.add(headPick);
+            
+            // FIX: Rotate pickaxe 180 degrees (local Y) to face forward relative to the flipped arm
+            pickGroup.rotation.y = Math.PI;
+            pickGroup.rotation.x = Math.PI / 2;
+            pickGroup.position.set(0, -0.5, 0.2);
+            pickGroup.visible = false;
+            armR.add(pickGroup);
+
+            group.userData = { armL, armR, legL, legR, gun: gunGroup, gunBody, pickaxe: pickGroup, head, eye };
+            return group;
+        }
+
+        function createTerrain() {
+            const geo = new THREE.PlaneGeometry(WORLD_SIZE, WORLD_SIZE, 64, 64);
+            geo.rotateX(-Math.PI / 2);
+            const pos = geo.attributes.position;
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                const y = (Math.sin(x*0.04) + Math.cos(z*0.04)) * 3 + (Math.sin(x*0.1) * Math.cos(z*0.1)) * 2;
+                pos.setY(i, y);
+            }
+            geo.computeVertexNormals();
+            const mat = new THREE.MeshStandardMaterial({ color: 0x558833, flatShading: true });
+            terrainMesh = new THREE.Mesh(geo, mat);
+            terrainMesh.receiveShadow = true;
+            scene.add(terrainMesh);
+
+            // Trees
+            for (let i = 0; i < 100; i++) {
+                const x = (Math.random() - 0.5) * (WORLD_SIZE - 20);
+                const z = (Math.random() - 0.5) * (WORLD_SIZE - 20);
+                const y = getTerrainHeight(x, z);
+                
+                const tree = new THREE.Group();
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.6, 2, 6), new THREE.MeshStandardMaterial({color: 0x654321}));
+                trunk.position.y = 1;
+                const leaves = new THREE.Mesh(new THREE.ConeGeometry(3, 5, 8), new THREE.MeshStandardMaterial({color: 0x228B22}));
+                leaves.position.y = 3.5;
+                tree.add(trunk);
+                tree.add(leaves);
+                tree.position.set(x, y, z);
+                tree.traverse(o => { if(o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+                scene.add(tree);
+            }
+        }
+
+        function getTerrainHeight(x, z) {
+            return (Math.sin(x*0.04) + Math.cos(z*0.04)) * 3 + (Math.sin(x*0.1) * Math.cos(z*0.1)) * 2;
+        }
+
+        function createPlayer() {
+            const mesh = createHumanoidModel(0x3498db);
+            player = {
+                mesh: mesh,
+                position: new THREE.Vector3(0, 50, 0),
+                velocity: new THREE.Vector3(),
+                onGround: false,
+                isHit: false // State for damage flicker
+            };
+            scene.add(mesh);
+        }
+
+        function spawnBots() {
+            const limit = WORLD_SIZE/2 - 50;
+            for (let i=0; i<BOT_COUNT; i++) {
+                let x, z, distance;
+                do {
+                    x = (Math.random() - 0.5) * limit * 2;
+                    z = (Math.random() - 0.5) * limit * 2;
+                    distance = Math.sqrt(x*x + z*z);
+                } while (distance < BOT_SPAWN_RADIUS); // Ensure bots are far away
+                
+                const bot = {
+                    mesh: createHumanoidModel(0xe74c3c),
+                    position: new THREE.Vector3(x, 100, z),
+                    velocity: new THREE.Vector3(),
+                    health: 100,
+                    lastShot: 0,
+                    speed: 4 + Math.random() * 3,
+                    aggro: false, // Will chase if true
+                    flashTime: 0 // Flash return fix
+                };
+                bot.mesh.userData.gun.visible = true;
+                scene.add(bot.mesh);
+                bots.push(bot);
+            }
+        }
+
+        function spawnChests() {
+            for (let i=0; i<CHEST_COUNT; i++) {
+                const x = (Math.random()-0.5) * (WORLD_SIZE-50);
+                const z = (Math.random()-0.5) * (WORLD_SIZE-50);
+                const y = getTerrainHeight(x, z) + 0.5;
+                
+                const chest = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 0.8), new THREE.MeshStandardMaterial({color: 0xf1c40f, roughness: 0.3}));
+                chest.position.set(x, y, z);
+                chest.castShadow = true;
+                scene.add(chest);
+                chests.push({ mesh: chest, opened: false });
+            }
+        }
+
+        // --- Mechanics ---
+
+        function startGame() {
+            document.getElementById('main-menu').style.display = 'none';
+            document.getElementById('hud-top').style.display = 'flex';
+            document.getElementById('inventory-bar').style.display = 'flex';
+            document.getElementById('damage-indicator').style.display = 'block';
+            document.body.requestPointerLock();
+
+            // Reset
+            gameState.health = 100;
+            gameState.inventory = ["Pickaxe", null, null, null, null];
+            gameState.activeSlot = 0;
+            gameState.ammo = { clip: 0, reserve: 0 };
+            gameState.enemiesAlive = BOT_COUNT;
+            gameState.activeWeaponData = null;
+            
+            bots.forEach(b => scene.remove(b.mesh)); bots = [];
+            chests.forEach(c => scene.remove(c.mesh)); chests = [];
+            projectiles.forEach(p => scene.remove(p.mesh)); projectiles = [];
+            
+            spawnBots();
+            spawnChests();
+            updateInventoryUI();
+            updateHUD();
+
+            player.position.set(0, 60, 0);
+            player.velocity.set(0,0,0);
+            isGameActive = true;
+        }
+
+        function updateInventoryUI() {
+            for (let i=0; i<5; i++) {
+                const el = document.getElementById(`item-${i}`);
+                const slot = document.getElementById(`slot-${i}`);
+                el.innerText = gameState.inventory[i] || "Empty";
+                slot.className = i === gameState.activeSlot ? "slot active" : "slot";
+            }
+            updatePlayerModelGear();
+        }
+
+        function updatePlayerModelGear() {
+            const itemName = gameState.inventory[gameState.activeSlot];
+            const parts = player.mesh.userData;
+            const weaponData = WEAPONS[itemName];
+
+            parts.pickaxe.visible = (itemName === "Pickaxe");
+            
+            if (weaponData) {
+                parts.gun.visible = true;
+                parts.gunBody.material.color.setHex(weaponData.color);
+                
+                // Set Game State Stats
+                if (gameState.activeWeaponData?.name !== itemName) {
+                    // Swapped to new gun, update clip
+                    gameState.ammo.clip = weaponData.clip; 
+                    gameState.activeWeaponData = { ...weaponData, name: itemName };
+                    camOffsetAds = new THREE.Vector3(0.5, 0.0, weaponData.adsZoom);
+                }
+            } else {
+                parts.gun.visible = false;
+                gameState.activeWeaponData = null;
+            }
+            
+            updateHUD();
+        }
+
+        function createProjectile(start, dir, isPlayer) {
+            const mesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.1, 4, 4), 
+                new THREE.MeshBasicMaterial({ color: isPlayer ? 0xffff00 : 0xff4400 })
+            );
+            mesh.position.copy(start);
+            scene.add(mesh);
+            
+            // Tail
+            const tailGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,2)]);
+            const tail = new THREE.Line(tailGeo, new THREE.LineBasicMaterial({ color: isPlayer ? 0xffff00 : 0xff4400, transparent: true, opacity: 0.5 }));
+            mesh.add(tail);
+            tail.lookAt(dir);
+
+            projectiles.push({
+                mesh: mesh,
+                velocity: dir.clone().multiplyScalar(PROJECTILE_SPEED), // Faster bullets
+                life: 1.5,
+                fromPlayer: isPlayer,
+                // New: store the previous position for raycasting
+                lastPos: start.clone() 
+            });
+        }
+
+        function checkProjectileCollision(p, step) {
+            const start = p.lastPos;
+            const end = p.mesh.position;
+            const direction = step.clone().normalize();
+            const distance = step.length();
+            
+            const raycaster = new THREE.Raycaster(start, direction, 0, distance);
+            
+            // Check for Player hit
+            if (!p.fromPlayer) {
+                const playerHitbox = new THREE.Box3().setFromObject(player.mesh);
+                if (playerHitbox.containsPoint(end)) {
+                    takeDamage(8);
+                    return true;
+                }
+            }
+
+            // Check for Bot hit (if it was a player projectile)
+            if (p.fromPlayer) {
+                for(let bot of bots) {
+                    const botHitbox = new THREE.Box3().setFromObject(bot.mesh);
+                    if (botHitbox.containsPoint(end)) {
+                        applyBotDamage(bot, p.damage || 15);
+                        return true;
+                    }
+                }
+            }
+            
+            // Check for Terrain hit
+            const intersects = raycaster.intersectObject(terrainMesh);
+            if (intersects.length > 0) {
+                return true;
+            }
+
+            return false;
+        }
+
+        function updateProjectiles(dt) {
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.life -= dt;
+                
+                p.lastPos.copy(p.mesh.position); // Store current pos
+                const step = p.velocity.clone().multiplyScalar(dt);
+                p.mesh.position.add(step);
+
+                // Collision check
+                if (checkProjectileCollision(p, step) || p.life <= 0) {
+                    scene.remove(p.mesh);
+                    projectiles.splice(i, 1);
+                }
+            }
+        }
+
+        function applyBotDamage(bot, dmg) {
+             // Aggro Bot
+            bot.aggro = true;
+
+            bot.health -= dmg;
+            showDamage(bot.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0)), dmg);
+            
+            // Flash Effect (FIXED: use a timer to reset)
+            bot.flashTime = 0.05; // Flash for 50ms
+
+            if (bot.health <= 0 && bots.includes(bot)) {
+                scene.remove(bot.mesh);
+                bots = bots.filter(b => b !== bot);
+                gameState.enemiesAlive--;
+                updateHUD();
+                if (gameState.enemiesAlive === 0) showWin();
+            }
+        }
+
+        function shootPlayer() {
+            if (gameState.isReloading || !gameState.activeWeaponData) return;
+            
+            const weapon = gameState.activeWeaponData;
+            const now = performance.now();
+            if (now - lastShotTime < weapon.fireRate) return;
+
+            if (gameState.ammo.clip <= 0) {
+                reload();
+                return;
+            }
+
+            lastShotTime = now;
+            gameState.ammo.clip--;
+            updateHUD();
+
+            // Barrel Position
+            const gunWorldPos = new THREE.Vector3();
+            // Get position of the end of the barrel (gun's second child which is the barrel, offset by -0.4)
+            player.mesh.userData.gun.children[1].getWorldPosition(gunWorldPos);
+
+            // Center of Screen Ray
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera); 
+            
+            const targetPoint = raycaster.ray.at(weapon.range, new THREE.Vector3());
+            
+            // Apply Shotgun Pellets or Single Shot
+            const pellets = weapon.pellets || 1;
+            
+            for(let i=0; i<pellets; i++) {
+                // Visual Tracer Direction
+                const dir = new THREE.Vector3().subVectors(targetPoint, gunWorldPos).normalize();
+                
+                // Spread Logic
+                const currentSpread = isADS ? weapon.spread * 0.3 : weapon.spread;
+                
+                dir.x += (Math.random()-0.5) * currentSpread;
+                dir.y += (Math.random()-0.5) * currentSpread;
+                dir.z += (Math.random()-0.5) * currentSpread;
+                
+                dir.normalize();
+
+                const p = createProjectile(gunWorldPos, dir, true);
+                p.damage = weapon.damage; // Attach damage to projectile for collision check
+            }
+        }
+
+        function shootBot(bot) {
+            const weapon = { damage: 8, fireRate: 800, range: 100 }; // Bot default gun
+            
+            if (performance.now() - bot.lastShot < weapon.fireRate) return;
+            bot.lastShot = performance.now();
+            
+            // Barrel Position
+            const gunPos = bot.mesh.position.clone().add(new THREE.Vector3(0, 1.2, 0.5));
+            
+            // Target direction
+            const target = player.position.clone().add(new THREE.Vector3(0,1.5,0)); // Aim at head/chest
+            let dir = new THREE.Vector3().subVectors(target, gunPos).normalize();
+            
+            // Miss Logic: Apply randomness based on distance and constant miss chance
+            const dist = bot.position.distanceTo(player.position);
+            const accuracyFactor = dist / 60; // Max spread at 60 units
+            
+            let spread = 0.05 * accuracyFactor;
+            
+            // Miss chance check
+            if (Math.random() < BOT_MISS_CHANCE) {
+                spread += 0.1; // Add extra spread for guaranteed miss
+            }
+            
+            dir.x += (Math.random()-0.5) * spread;
+            dir.y += (Math.random()-0.5) * spread;
+            dir.z += (Math.random()-0.5) * spread;
+            dir.normalize();
+
+            const p = createProjectile(gunPos, dir, false);
+            p.damage = weapon.damage;
+            p.shooterPos = bot.position.clone(); // For directional damage indicator
+        }
+
+        function reload() {
+            if (gameState.isReloading || gameState.ammo.clip === gameState.activeWeaponData?.clip || gameState.ammo.reserve === 0) return;
+            gameState.isReloading = true;
+            document.getElementById('reload-msg').style.display = 'block';
+            setTimeout(() => {
+                const maxClip = gameState.activeWeaponData.clip;
+                const needed = maxClip - gameState.ammo.clip;
+                const taken = Math.min(needed, gameState.ammo.reserve);
+                gameState.ammo.clip += taken;
+                gameState.ammo.reserve -= taken;
+                gameState.isReloading = false;
+                document.getElementById('reload-msg').style.display = 'none';
+                updateHUD();
+            }, 1500);
+        }
+
+        // --- Update Loop ---
+
+        function updatePlayerLogic(dt) {
+            if (!isGameActive) return;
+
+            // Rotation
+            player.mesh.rotation.y = cameraRotation.y;
+
+            // Movement
+            const dir = new THREE.Vector3();
+            const fwd = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), cameraRotation.y);
+            const right = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), cameraRotation.y);
+
+            if (keys.w) dir.add(fwd);
+            if (keys.s) dir.sub(fwd);
+            if (keys.d) dir.add(right);
+            if (keys.a) dir.sub(right);
+            if (dir.lengthSq() > 0) dir.normalize();
+
+            player.position.add(dir.multiplyScalar(PLAYER_SPEED * dt));
+
+            // Physics
+            player.velocity.y -= GRAVITY * dt;
+            player.position.y += player.velocity.y * dt;
+
+            const groundY = getTerrainHeight(player.position.x, player.position.z);
+            if (player.position.y < groundY) {
+                player.position.y = groundY;
+                player.velocity.y = 0;
+                player.onGround = true;
+            } else {
+                player.onGround = false;
+            }
+
+            if (keys.space && player.onGround) {
+                player.velocity.y = JUMP_FORCE;
+            }
+
+            const lim = WORLD_SIZE/2 - 2;
+            player.position.x = THREE.MathUtils.clamp(player.position.x, -lim, lim);
+            player.position.z = THREE.MathUtils.clamp(player.position.z, -lim, lim);
+
+            player.mesh.position.copy(player.position);
+
+            // Camera Follow
+            const headPos = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+            
+            const targetOffset = isADS ? camOffsetAds : CAM_OFFSET_NORMAL;
+            const euler = new THREE.Euler(0, cameraRotation.y, 0, 'YXZ');
+            const rotOffset = targetOffset.clone().applyEuler(euler);
+            
+            const camTarget = headPos.clone().add(rotOffset);
+            camTarget.y += Math.sin(cameraRotation.x) * 2; 
+
+            camera.position.lerp(camTarget, 0.2);
+            
+            const lookDir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0, 'YXZ'));
+            camera.lookAt(headPos.clone().add(lookDir.multiplyScalar(10)));
+            
+            const isWalking = dir.lengthSq() > 0;
+            animateModel(player.mesh, dt, isWalking, isADS, gameState.isReloading);
+        }
+
+        function checkBotVisibility(bot) {
+            const dist = bot.position.distanceTo(player.position);
+            if (dist > 100) return false; 
+
+            const botEyePos = bot.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+            const dirToPlayer = new THREE.Vector3().subVectors(player.position, bot.position).normalize();
+            
+            const ray = new THREE.Raycaster(botEyePos, dirToPlayer);
+            // Only check collision with terrain
+            const intersects = ray.intersectObject(terrainMesh);
+            
+            const distToTerrain = (intersects.length > 0) ? intersects[0].distance : 9999;
+            
+            // Check if player is closer than the terrain hit
+            if (dist < distToTerrain) {
+                return true;
+            }
+            return false;
+        }
+
+        function updateBotsLogic(dt) {
+            for(const bot of bots) {
+                const dist = bot.position.distanceTo(player.position);
+                
+                // Handle flash
+                if (bot.flashTime > 0) {
+                    bot.flashTime -= dt;
+                    bot.mesh.traverse(c => {
+                        if(c.isMesh && c.material.emissive) {
+                            c.material.emissive.setHex(0xffffff);
+                        }
+                    });
+                } else {
+                    // Turn off flash permanently
+                    bot.mesh.traverse(c => {
+                        if(c.isMesh && c.material.emissive) {
+                            c.material.emissive.setHex(0x000000);
+                        }
+                    });
+                }
+
+                const canSee = checkBotVisibility(bot);
+                let shouldChase = bot.aggro || (canSee && dist < 80);
+
+                let moving = false;
+                if (shouldChase && dist > 15) {
+                    const dir = new THREE.Vector3().subVectors(player.position, bot.position).normalize();
+                    dir.y = 0;
+                    bot.position.add(dir.multiplyScalar(bot.speed * dt));
+                    moving = true;
+                }
+                
+                // Bot always looks at the player if aggro or can see
+                if (shouldChase || canSee) {
+                    bot.mesh.lookAt(player.position.x, bot.position.y, player.position.z);
+                }
+
+                // Shooting check: only if visible and close enough
+                if (canSee && dist < 60) {
+                    if (performance.now() - bot.lastShot > 1500) {
+                        shootBot(bot);
+                    }
+                }
+
+
+                const gy = getTerrainHeight(bot.position.x, bot.position.z);
+                bot.position.y = gy;
+                bot.mesh.position.copy(bot.position);
+
+                animateModel(bot.mesh, dt, moving, false, false);
+            }
+        }
+
+        function animateModel(mesh, dt, isMoving, ads, reloading) {
+            const p = mesh.userData;
+            mesh.userData.time = (mesh.userData.time || 0) + dt * 10;
+            const t = mesh.userData.time;
+
+            if (isMoving) {
+                p.legL.rotation.x = Math.sin(t)*0.6;
+                p.legR.rotation.x = Math.sin(t+Math.PI)*0.6;
+                p.armL.rotation.x = Math.sin(t+Math.PI)*0.6;
+                p.armR.rotation.x = Math.sin(t)*0.6;
+            } else {
+                p.legL.rotation.x = 0; p.legR.rotation.x = 0;
+                p.armL.rotation.x = 0; p.armR.rotation.x = 0;
+            }
+
+            // Gun Arm Overrides
+            if (p.gun.visible) {
+                // The armR is already rotated 180 degrees (Math.PI) to face forward
+                // Adjust X rotation for stance
+                const armRotX = isMoving ? p.armR.rotation.x : 0;
+                
+                if (reloading) {
+                    p.armR.rotation.x = -Math.PI/2 + 0.5;
+                } else if (ads) {
+                    p.armR.rotation.x = -Math.PI/2 - 0.2; 
+                    p.armR.rotation.y = Math.PI - 0.2; // Add PI because of arm 180 flip
+                } else {
+                    p.armR.rotation.x = armRotX - 0.1; 
+                    p.armR.rotation.y = Math.PI; // Standard 180 flipped
+                }
+            }
+            
+            if (p.pickaxe.visible && keys.mouse && !isMoving) {
+                 p.armR.rotation.x = -Math.PI/2 + Math.sin(t*4) * 0.8;
+                 p.armR.rotation.y = Math.PI;
+            }
+        }
+
+        function checkInteractions() {
+            let nearChest = false;
+            for(const c of chests) {
+                if(!c.opened && c.mesh.position.distanceTo(player.position) < 4) {
+                    nearChest = true;
+                    if(keys.e) {
+                        c.opened = true;
+                        c.mesh.material.color.setHex(0x555555);
+                        
+                        // Random Weapon Drop
+                        const types = Object.keys(WEAPONS);
+                        const rando = types[Math.floor(Math.random() * types.length)];
+                        
+                        const emptyIdx = gameState.inventory.indexOf(null);
+                        if(emptyIdx !== -1) {
+                            gameState.inventory[emptyIdx] = rando;
+                            showWeaponMsg(`Picked up ${rando}!`);
+                        } else {
+                            if (gameState.activeSlot !== 0) {
+                                gameState.inventory[gameState.activeSlot] = rando;
+                                showWeaponMsg(`Swapped for ${rando}!`);
+                            } else {
+                                showWeaponMsg("Inventory Full! (Equip an empty slot first)");
+                            }
+                        }
+                        
+                        gameState.ammo.reserve += 40;
+                        updateInventoryUI();
+                        keys.e = false;
+                    }
+                }
+            }
+            document.getElementById('interaction-msg').style.display = nearChest ? 'block' : 'none';
+        }
+
+        function showDamage(pos, val) {
+            const div = document.createElement('div');
+            div.className = 'damage-popup';
+            div.innerText = val;
+            document.getElementById('ui-layer').appendChild(div);
+            damagePopups.push({ el: div, pos: pos.clone(), life: 1.0 });
+        }
+
+        function showWeaponMsg(text) {
+            const el = document.getElementById('weapon-msg');
+            el.innerText = text;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 2000);
+        }
+
+        function updateUI(dt) {
+            for(let i=damagePopups.length-1; i>=0; i--) {
+                const p = damagePopups[i];
+                p.life -= dt;
+                p.pos.y += dt; 
+                
+                const screen = p.pos.clone().project(camera);
+                const x = (screen.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (-(screen.y * 0.5) + 0.5) * window.innerHeight;
+                
+                p.el.style.left = x + 'px';
+                p.el.style.top = y + 'px';
+                p.el.style.opacity = p.life;
+
+                if(p.life <= 0) {
+                    p.el.remove();
+                    damagePopups.splice(i, 1);
+                }
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById('health-display').innerText = gameState.health;
+            
+            const item = gameState.inventory[gameState.activeSlot];
+            if(WEAPONS[item]) {
+                document.getElementById('ammo-display').innerText = `${gameState.ammo.clip} / ${gameState.ammo.reserve}`;
+            } else {
+                document.getElementById('ammo-display').innerText = "--";
+            }
+            
+            document.getElementById('enemies-display').innerText = gameState.enemiesAlive;
+            
+            const ch = document.getElementById('crosshair');
+            if (isADS) ch.className = 'ads';
+            else if (gameState.activeWeaponData?.name === "Shotgun") ch.className = 'spread';
+            else ch.className = '';
+        }
+        
+        function showWin() { isGameActive = false; document.exitPointerLock(); document.getElementById('win-screen').style.display = 'flex'; }
+        
+        function takeDamage(n, sourcePos) {
+             gameState.health -= n;
+             updateHUD();
+             
+             // Radial Indicator Logic
+             if (sourcePos) {
+                const playerFwd = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), cameraRotation.y);
+                const dirToSource = new THREE.Vector3().subVectors(sourcePos, player.position).normalize();
+                
+                // Calculate angle (in radians) between player's forward vector and the direction to the source
+                const angle = Math.atan2(playerFwd.z, playerFwd.x) - Math.atan2(dirToSource.z, dirToSource.x);
+                let degrees = angle * (180 / Math.PI);
+
+                // Normalize to 0-360
+                degrees = (degrees + 360) % 360; 
+
+                // Rotate the indicator so 0 degrees (up) is where the source is relative to player view
+                // We want the arrow to point *away* from the shooter on the screen (i.e. where to look)
+                
+                // The angle we need to rotate the arrow is 180 degrees offset from the direction to source
+                // degrees = degrees + 180; // This gives the direction *from* the source
+
+                // Show the indicator and rotate the arrow
+                damageIndicatorElement.style.display = 'block';
+                damageIndicatorElement.arrow.style.opacity = 1.0;
+                damageIndicatorElement.arrow.style.transform = `rotate(${-degrees}deg) translateY(-50%)`;
+
+                clearTimeout(damageIndicatorElement.timer);
+                damageIndicatorElement.timer = setTimeout(() => {
+                    damageIndicatorElement.arrow.style.opacity = 0;
+                }, 500);
+             }
+
+
+             if(gameState.health <= 0) { 
+                isGameActive = false; 
+                document.exitPointerLock(); 
+                document.getElementById('death-screen').style.display = 'flex'; 
+            }
+        }
+
+        // --- Input ---
+        function onKeyDown(e) {
+            const k = e.key.toLowerCase();
+            if(keys[k] !== undefined) keys[k] = true;
+            if(k === 'e') keys.e = true;
+            if(['1','2','3','4','5'].includes(k)) {
+                gameState.activeSlot = parseInt(k) - 1;
+                updateInventoryUI();
+            }
+        }
+        function onKeyUp(e) {
+            const k = e.key.toLowerCase();
+            if(keys[k] !== undefined) keys[k] = false;
+            if(k === 'e') keys.e = false;
+        }
+        function onMouseDown(e) {
+            if(!isGameActive) return;
+            if(e.button === 0) {
+                keys.mouse = true;
+                if(gameState.activeWeaponData || gameState.inventory[gameState.activeSlot] === "Pickaxe") shootPlayer();
+            }
+            if(e.button === 2) isADS = true;
+        }
+        function onMouseUp(e) {
+            if(e.button === 0) keys.mouse = false;
+            if(e.button === 2) isADS = false;
+        }
+        function onMouseMove(e) {
+            if(document.pointerLockElement === document.body && isGameActive) {
+                const sens = isADS ? 0.001 : 0.002;
+                cameraRotation.y -= e.movementX * sens;
+                cameraRotation.x -= e.movementY * sens;
+                cameraRotation.x = Math.max(-1.4, Math.min(1.4, cameraRotation.x));
+            }
+        }
+        function onResize() {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const dt = Math.min((time - lastTime)/1000, 0.1);
+            lastTime = time;
+
+            if (isGameActive) {
+                updatePlayerLogic(dt);
+                updateBotsLogic(dt);
+                updateProjectiles(dt);
+                checkInteractions();
+                updateUI(dt);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            init();
+        }
+    </script>
+</body>
+</html>
